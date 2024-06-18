@@ -582,8 +582,7 @@ pub fn unpack_to_bitwidth<'ast, T: Field>(
     #[allow(clippy::needless_collect)]
     let outputs: Vec<_> = directive_outputs
         .iter()
-        .enumerate()
-        .map(|(_, o)| FlatExpression::identifier(*o))
+        .map(|o| FlatExpression::identifier(*o))
         .collect();
 
     // o253, o252, ... o{253 - (bit_width - 1)} are bits

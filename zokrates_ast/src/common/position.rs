@@ -173,7 +173,7 @@ impl LocalSourceSpan {
 
 impl Position {
     pub fn col(&self, delta: isize) -> Position {
-        assert!(self.col <= isize::max_value() as usize);
+        assert!(self.col <= isize::MAX as usize);
         assert!(self.col as isize >= delta);
         Position {
             line: self.line,

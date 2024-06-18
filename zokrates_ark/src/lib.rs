@@ -91,7 +91,7 @@ impl<'a, T: Field + ArkFieldExtensions, I: IntoIterator<Item = Statement<'a, T>>
         match cs {
             ConstraintSystemRef::CS(rc) => {
                 let mut cs = rc.borrow_mut();
-                symbols.extend(self.program.arguments.iter().enumerate().map(|(_, p)| {
+                symbols.extend(self.program.arguments.iter().map(|p| {
                     let wire = match p.private {
                         true => cs.new_witness_variable(|| {
                             Ok(witness
