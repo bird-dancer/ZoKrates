@@ -7,6 +7,7 @@ use crate::util::normalize_path;
 use rand_0_8::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
+use serde_wasm_bindgen::{from_value, to_value};
 use std::convert::TryFrom;
 use std::io::{Cursor, Write};
 use std::path::{Component, PathBuf};
@@ -57,7 +58,7 @@ impl CompilationResult {
     }
 
     pub fn abi(&self) -> JsValue {
-        JsValue::from_serde(&self.abi).unwrap()
+        to_value(&self.abi).unwrap()
     }
 
     pub fn snarkjs_program(&self) -> Option<js_sys::Uint8Array> {
@@ -69,7 +70,7 @@ impl CompilationResult {
     }
 
     pub fn constraint_count(&self) -> JsValue {
-        JsValue::from_serde(&self.constraint_count).unwrap()
+        to_value(&self.constraint_count).unwrap()
     }
 }
 
@@ -189,7 +190,7 @@ impl<'a> Resolver<Error> for JsResolver<'a> {
                     )));
                 }
 
-                let result: serde_json::Value = value.into_serde().unwrap();
+                let result: serde_json::Value = from_value(value).unwrap();
                 let source = result
                     .get("source")
                     .ok_or_else(|| Error::new("missing field `source`"))?
@@ -258,7 +259,7 @@ mod internal {
         config: JsValue,
     ) -> Result<CompilationResult, JsValue> {
         let resolver = JsResolver::new(resolve_callback);
-        let config: serde_json::Value = config.into_serde().unwrap();
+        let config: serde_json::Value = from_value(config).unwrap();
         let with_snarkjs_program = config
             .get("snarkjs")
             .map(|v| *v == serde_json::Value::Bool(true))
@@ -308,14 +309,14 @@ mod internal {
     ) -> Result<ComputationResult, JsValue> {
         let input = args.as_string().unwrap();
 
-        let config: serde_json::Value = config.into_serde().unwrap();
+        let config: serde_json::Value = from_value(config).unwrap();
         let with_snarkjs_witness = config
             .get("snarkjs")
             .map(|v| *v == serde_json::Value::Bool(true))
             .unwrap_or(false);
 
         let (inputs, signature) = if abi.is_object() {
-            let abi: Abi = abi.into_serde().map_err(|err| {
+            let abi: Abi = from_value(abi).map_err(|err| {
                 JsValue::from_str(&format!("Could not deserialize `abi`: {}", err))
             })?;
 
@@ -389,7 +390,7 @@ mod internal {
         let keypair = B::setup(program, rng);
         let tagged_keypair = TaggedKeypair::<T, S>::new(keypair);
         Keypair {
-            vk: JsValue::from_serde(&tagged_keypair.vk).unwrap(),
+            vk: to_value(&tagged_keypair.vk).unwrap(),
             pk: tagged_keypair.pk,
         }
     }
@@ -407,7 +408,7 @@ mod internal {
         let keypair = B::setup(srs.to_vec(), program).map_err(|e| JsValue::from_str(&e))?;
         let tagged_keypair = TaggedKeypair::<T, S>::new(keypair);
         Ok(Keypair {
-            vk: JsValue::from_serde(&tagged_keypair.vk).unwrap(),
+            vk: to_value(&tagged_keypair.vk).unwrap(),
             pk: tagged_keypair.pk,
         })
     }
@@ -434,7 +435,7 @@ mod internal {
             .map_err(|err| JsValue::from_str(&format!("Could not read witness: {}", err)))?;
 
         let proof = B::generate_proof(prog, ir_witness, pk, rng);
-        Ok(JsValue::from_serde(&TaggedProof::<T, S>::new(proof.proof, proof.inputs)).unwrap())
+        Ok(to_value(&TaggedProof::<T, S>::new(proof.proof, proof.inputs)).unwrap())
     }
 
     pub fn verify<T: Field, S: Scheme<T>, B: Backend<T, S>>(
@@ -447,7 +448,7 @@ mod internal {
             serde_json::from_value(proof).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         let result = B::verify(vk, proof);
-        Ok(JsValue::from_serde(&result).unwrap())
+        Ok(to_value(&result).unwrap())
     }
 
     pub fn format_proof<T: SolidityCompatibleField, S: SolidityCompatibleScheme<T>>(
@@ -474,7 +475,7 @@ mod internal {
             json!([proof_vec])
         };
 
-        Ok(JsValue::from_serde(&result).unwrap())
+        Ok(to_value(&result).unwrap())
     }
 
     pub fn export_solidity_verifier<T: SolidityCompatibleField, S: SolidityCompatibleScheme<T>>(
@@ -544,9 +545,7 @@ pub fn compute_witness(
 
 #[wasm_bindgen]
 pub fn export_solidity_verifier(vk: JsValue) -> Result<JsValue, JsValue> {
-    let vk: serde_json::Value = vk
-        .into_serde()
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let vk: serde_json::Value = from_value(vk).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let curve = CurveParameter::try_from(
         vk["curve"]
@@ -577,7 +576,7 @@ pub fn export_solidity_verifier(vk: JsValue) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn setup(program: &[u8], entropy: JsValue, options: JsValue) -> Result<Keypair, JsValue> {
-    let options: serde_json::Value = options.into_serde().unwrap();
+    let options: serde_json::Value = from_value(options).unwrap();
 
     let backend = BackendParameter::try_from(
         options["backend"]
@@ -649,7 +648,7 @@ pub fn setup(program: &[u8], entropy: JsValue, options: JsValue) -> Result<Keypa
 
 #[wasm_bindgen]
 pub fn setup_with_srs(srs: &[u8], program: &[u8], options: JsValue) -> Result<Keypair, JsValue> {
-    let options: serde_json::Value = options.into_serde().unwrap();
+    let options: serde_json::Value = from_value(options).unwrap();
 
     let scheme = SchemeParameter::try_from(
         options["scheme"]
@@ -725,7 +724,7 @@ pub fn generate_proof(
     entropy: JsValue,
     options: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let options: serde_json::Value = options.into_serde().unwrap();
+    let options: serde_json::Value = from_value(options).unwrap();
 
     let backend = BackendParameter::try_from(
         options["backend"]
@@ -812,7 +811,7 @@ pub fn generate_proof(
 
 #[wasm_bindgen]
 pub fn verify(vk: JsValue, proof: JsValue, options: JsValue) -> Result<JsValue, JsValue> {
-    let options: serde_json::Value = options.into_serde().unwrap();
+    let options: serde_json::Value = from_value(options).unwrap();
     let backend = BackendParameter::try_from(
         options["backend"]
             .as_str()
@@ -820,8 +819,8 @@ pub fn verify(vk: JsValue, proof: JsValue, options: JsValue) -> Result<JsValue, 
     )
     .map_err(|e| JsValue::from_str(&e))?;
 
-    let vk: serde_json::Value = vk.into_serde().unwrap();
-    let proof: serde_json::Value = proof.into_serde().unwrap();
+    let vk: serde_json::Value = from_value(vk).unwrap();
+    let proof: serde_json::Value = from_value(proof).unwrap();
     let vk_curve = CurveParameter::try_from(
         vk["curve"]
             .as_str()
@@ -899,7 +898,7 @@ pub fn verify(vk: JsValue, proof: JsValue, options: JsValue) -> Result<JsValue, 
 
 #[wasm_bindgen]
 pub fn format_proof(proof: JsValue) -> Result<JsValue, JsValue> {
-    let proof: serde_json::Value = proof.into_serde().unwrap();
+    let proof: serde_json::Value = from_value(proof).unwrap();
 
     let curve = CurveParameter::try_from(
         proof["curve"]
